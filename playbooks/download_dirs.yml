@@ -1,0 +1,53 @@
+---
+- name: Synchroniser une liste de dossiers
+  hosts: webmachine
+  become: yes
+  vars:
+    backup_dir: ~/backup
+    dirs_to_sync:
+      - /etc/apache2/
+      - /etc/http/
+      - /etc/nginx/
+      - /etc/httpd/
+      - /etc/lighttpd/
+      - /var/www/html
+      - /var/www/lighttpd/
+      - /usr/local/etc/apache22/
+      - /usr/local/etc/nginx/
+      - /usr/local/etc/httpd/
+      - /usr/local/etc/lighttpd/
+      - /srv/http/
+      - /srv/www/
+  tasks:
+    - name: Installer rsync sur la machine distante
+      become: true
+      package:
+        name: rsync
+        state: present
+
+    - name: Créer le répertoire de sauvegarde
+      file:
+        path: "{{ backup_dir }}/{{ inventory_hostname }}/apache2/"
+        state: directory
+      connection: local
+      become: false
+
+    - name: Vérifier si le dossier existe
+      stat:
+        path: "{{ item }}"
+      register: dir_stat
+      ignore_errors: true
+      loop: "{{ dirs_to_sync }}"
+
+    - name: Télécharger les dossiers spécifiés
+      synchronize:
+        src: "{{ item }}"
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}/{{ item.replace('/', '_') }}"
+        mode: pull
+        rsync_path: /usr/bin/sudo /usr/bin/rsync
+      loop: "{{ dirs_to_sync }}"
+      loop_control:
+        index_var: i
+      when: dir_stat.results[i].stat.exists
+      become: true
+      become_user: root

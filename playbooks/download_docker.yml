@@ -1,0 +1,99 @@
+- name: Download docker mount points and docker images
+  hosts: localhost
+  gather_facts: no
+  vars:
+    backup_dir: ~/backup
+  tasks:
+    - name: Check if Docker is installed
+      stat:
+        path: /usr/bin/docker
+      register: docker_binary
+
+    - name: Check if Docker service is running
+      systemd:
+        name: docker
+        state: started
+      register: docker_service
+
+    - name: Stop playbook if Docker is not installed
+      fail:
+        msg: "Docker is not installed. Please install Docker and try again."
+      when: docker_binary.stat.exists == False
+    
+    - name: Installer rsync sur la machine distante
+      become: true
+      package:
+        name: rsync
+        state: present
+
+    - name: Créer le répertoire de sauvegarde
+      file:
+        path: "{{ backup_dir }}/{{ inventory_hostname }}/docker"
+        state: directory
+        recurse: true
+      connection: local
+      become: false
+
+
+    - name: Get Docker containers
+      command: docker ps --format "{{ '{{' }} .Names {{ '}}' }}"
+      register: container_list
+
+    - name: Show containers
+      debug:
+        var: container_list.stdout_lines
+
+    - name: List mounted volumes for each container
+      shell: docker inspect -f {{'"{{ range .Mounts }}{{ .Source }} {{ end }}"'}} {{ item }}
+      loop: "{{ container_list.stdout_lines }}"
+      register: volume_list
+
+    - name: Identity mounted volumes
+      set_fact:
+        all_volumes: "{{ all_volumes|default([]) + item.stdout_lines }}"
+      loop: "{{ volume_list.results }}"
+
+    - name: Télécharger les dossiers spécifiés
+      synchronize:
+        src: "{{ item[:-1] }}"
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}/{{ item[:-1].replace('/', '_') }}"
+        mode: pull
+        rsync_path: /usr/bin/sudo /usr/bin/rsync
+      loop: "{{ all_volumes }}"
+      loop_control:
+        index_var: i
+      become: true
+      become_user: root
+
+    - name: Get active Docker images
+      command: docker inspect -f {{"'{{ .Config.Image }}'"}} ansible-test
+      register: active_images
+      loop: "{{ container_list.stdout_lines }}"
+      register: image_list
+
+    - name: Identity images
+      set_fact:
+        all_images: "{{ all_images|default([]) + item.stdout_lines }}"
+      loop: "{{ image_list.results }}"
+
+    - name: Debug
+      debug:
+        var: all_images
+
+    - name: Save Docker images
+      shell: docker save -o "/tmp/{{ image_name }}.tar" {{ image_name }}
+      loop: "{{ all_images }}"
+      loop_control:
+        loop_var: image_name
+      # when: "'<none>' not in item"
+
+    - name: Download Docker images
+      synchronize:
+        src: "/tmp/{{ image_name }}.tar"
+        dest: "~/backup/{{ inventory_hostname }}/docker/{{ image_name }}.tar"
+        mode: pull
+        rsync_path: /usr/bin/sudo /usr/bin/rsync
+      loop: "{{ all_images }}"
+      loop_control:
+        loop_var: image_name
+  
