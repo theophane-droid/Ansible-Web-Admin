@@ -18,6 +18,13 @@
       - /usr/local/etc/lighttpd/
       - /srv/http/
       - /srv/www/
+      - /etc/mysql/
+      - /etc/postgresql/
+      - /etc/mongodb/
+      - /etc/cassandra/
+      - /etc/redis/
+      - /etc/neo4j/
+      - /etc/elasticsearch/
   tasks:
     - name: Installer rsync sur la machine distante
       become: true
@@ -32,7 +39,7 @@
       connection: local
       become: false
 
-    - name: Vérifier si le dossier existe
+    - name: Vérifier si les dossiers existent
       stat:
         path: "{{ item }}"
       register: dir_stat

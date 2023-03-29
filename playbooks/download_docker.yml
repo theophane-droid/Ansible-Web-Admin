@@ -96,4 +96,3 @@
       loop: "{{ all_images }}"
       loop_control:
         loop_var: image_name
-  
