@@ -1,6 +1,7 @@
-[defaults]
-remote_user = remote_user # to change
-inventory = /etc/ansible/inventory/webapp
-host_key_checking = False
-forks = 5
-timeout = 30
+[all:vars]
+ansible_connection=ssh
+ansible_user=root
+ansible_ssh_pass=Admin1Admin1
+
+[webmachine]
+my_machine.local
